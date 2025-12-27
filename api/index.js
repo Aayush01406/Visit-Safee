@@ -10,11 +10,13 @@ import toggleService from '../server-lib/toggleService.js';
 import updateRequestStatus from '../server-lib/update-request-status.js';
 import uploadResidentsFromPDF from '../server-lib/uploadResidentsFromPDF.js';
 import sendPush from '../server-lib/send-push.js';
+import submitVisitorRequest from '../server-lib/submitVisitorRequest.js';
 import visitorAction from '../server-lib/visitor-action.js';
 
 const handlers = {
   createOwner,
   'broadcast-notification': broadcastNotification,
+  'submit-visitor-request': submitVisitorRequest,
   'send-push': sendPush,
   'visitor-action': visitorAction,
   deleteResidency,

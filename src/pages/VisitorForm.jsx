@@ -71,46 +71,10 @@ export default function VisitorForm({ residencyName }) {
     try {
       const requestId = await createRequest({ data, residencyId: residency.id, residencyName: residency.name });
 
-      // --- NOTIFICATION LOGIC ---
-      try {
-          console.log("Visitor notification triggered for flat:", data.flatId);
-          
-          if (data.flatId) {
-              const pushPayload = {
-                  residencyId: residency.id,
-                  flatId: String(data.flatId),
-                  title: "New Visitor Request",
-                  body: `${data.visitorName} is requesting entry`,
-                  data: {
-                      type: "visitor_request",
-                      requestId: requestId,
-                      residencyId: residency.id,
-                      visitorName: data.visitorName,
-                      flatId: String(data.flatId)
-                  }
-              };
-              
-              console.log("Sending push payload:", pushPayload);
-
-              // Call the existing notification sender (non-blocking)
-              fetch('/api/send-push', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(pushPayload)
-              }).then(async (res) => {
-                  const result = await res.json();
-                  console.log("Push notification result:", result);
-              }).catch(err => {
-                  console.warn("Failed to send push notification (network/server error):", err);
-              });
-          }
-      } catch (notifyErr) {
-          console.warn("Error preparing notification:", notifyErr);
-      }
-      // --- END NOTIFICATION LOGIC ---
+      // Notification is now handled by the server (submit-visitor-request)
 
       toast({ title: "Request Sent", description: "Waiting for resident approval." });
-      setLocation(`/visitor-success?id=${requestId}&residencyId=${residency.id}`);
+      setLocation(`/visitor-status/${requestId}?residencyId=${residency.id}`);
     } catch (err) {
       console.error("Error submitting form: ", err);
       toast({ title: "Error", description: err.message || "There was an error submitting the form", variant: "destructive" });

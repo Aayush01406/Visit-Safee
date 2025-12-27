@@ -370,16 +370,25 @@ class StorageService {
   async createPublicVisitorRequest(data, residencyId, residencyName) {
     if (!residencyId) throw new Error("Residency ID is required");
     
-    const docData = {
-      ...data,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    // Call API instead of direct Firestore write
+    const response = await fetch('/api/submit-visitor-request', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            ...data,
+            residencyId
+        }),
+    });
 
-    const docRef = await addDoc(collection(db, "residencies", residencyId, "visitor_requests"), docData);
-    
-    return docRef.id;
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Failed to submit request");
+    }
+
+    const result = await response.json();
+    return result.requestId;
   }
 
   async createVisitorRequest(data) {
