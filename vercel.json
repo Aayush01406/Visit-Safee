@@ -1,11 +1,8 @@
 {
-  "functions": {
-    "api/*.js": {
-      "runtime": "nodejs20.x"
-    }
-  },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/api/importResidents", "destination": "/api/importResidents.js" },
+    { "source": "/api/uploadResidentsFromPDF", "destination": "/api/uploadResidentsFromPDF.js" },
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

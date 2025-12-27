@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   // Parse the route from the URL
   // Expected format: /api/<route_name>?...
   const url = new URL(req.url, `http://${req.headers.host}`);
-  const pathname = url.pathname;
+  const pathname = url.pathname.replace(/\/$/, '');
   
   // Extract the last segment of the path as the route name
   // e.g. /api/createOwner -> createOwner
