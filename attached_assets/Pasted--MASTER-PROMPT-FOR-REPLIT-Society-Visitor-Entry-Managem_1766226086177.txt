@@ -1,0 +1,327 @@
+✅ MASTER PROMPT FOR REPLIT
+
+(Society Visitor Entry Management System – Full-Stack Web App)
+
+You are an expert full-stack engineer and system architect.
+Build a production-style, internship-level, full-stack web application based on the detailed requirements below.
+This is not a demo and not a toy CRUD app — it must reflect real-world logic, clean architecture, and live data flow.
+
+📌 PROJECT OVERVIEW
+
+Build a Society Visitor Entry Management Web Application that replaces traditional paper-based visitor registers used in residential societies.
+
+The system must:
+
+Digitize visitor entry using QR-based access
+
+Enforce resident approval before entry
+
+Provide role-based dashboards
+
+Store all data in a real database
+
+Reflect live status updates across users
+
+The application must be web-first and mobile-friendly, so visitors can use it directly from their phone browser without installing an app.
+
+🎯 CORE PROBLEM THIS PROJECT SOLVES
+
+Current society systems:
+
+Use paper registers
+
+Have no real verification
+
+Are messy and insecure
+
+Have no transparency or analytics
+
+This system must:
+
+Prevent unauthorized entry
+
+Give residents full control
+
+Make guards act only as verifiers
+
+Give admins visibility into all activity
+
+👥 USER ROLES & PERMISSIONS (VERY IMPORTANT)
+1️⃣ Visitor (Public User – No Login)
+
+Access only via QR code
+
+Can:
+
+Submit a visitor entry request
+
+View approval/rejection status in real time
+
+Cannot:
+
+Modify data after submission
+
+View internal society data
+
+2️⃣ Resident (Authenticated User)
+
+Linked to one flat
+
+Can:
+
+View visitor requests for their flat
+
+Approve or reject requests
+
+Cannot:
+
+See other flats’ visitors
+
+Access admin or guard controls
+
+3️⃣ Security Guard (Authenticated User)
+
+Can:
+
+View live visitor requests
+
+Verify approval status
+
+Cannot:
+
+Approve or reject requests
+
+Modify visitor data
+
+4️⃣ Chairman / Admin (Super User)
+
+One-time setup authority
+
+Can:
+
+Create society, blocks, flats
+
+Add residents and guards
+
+View all visitor logs
+
+Monitor statistics and activity
+
+Cannot:
+
+Override resident approval logic
+
+🔄 SYSTEM FLOW (MUST MATCH EXACTLY)
+🔹 One-Time Setup (Admin)
+
+Admin logs in
+
+Creates:
+
+Society profile
+
+Blocks and flats
+
+Registers residents (mapped to flats)
+
+Registers guards
+
+Generates society QR code
+
+QR code URL points to visitor request page
+
+🔹 Daily Visitor Entry Flow
+
+Visitor arrives at gate
+
+Scans QR code
+
+Visitor form opens (no login)
+
+Visitor enters:
+
+Name
+
+Phone number
+
+Flat number
+
+Purpose of visit
+
+Optional vehicle number
+
+Visitor submits request
+→ Status = PENDING
+
+Resident logs in
+
+Resident sees request
+
+Resident approves or rejects
+
+Guard dashboard updates live
+
+Visitor shows confirmation screen
+
+Entry allowed only if approved
+
+All actions must be logged.
+
+🗄 DATA MODELS (CONCEPTUAL)
+
+Design clean relational models for:
+
+User (with roles)
+
+Society
+
+Block
+
+Flat
+
+VisitorRequest
+
+VisitorRequest must include:
+
+Visitor name
+
+Phone number
+
+Flat reference
+
+Purpose
+
+Status (Pending / Approved / Rejected)
+
+Timestamp
+
+🧠 LOGIC & BEHAVIOR REQUIREMENTS
+
+Role-based access control
+
+Public access only for visitor form
+
+Live status reflection across dashboards
+
+No hardcoded data
+
+No fake approvals
+
+No shared permissions
+
+🎨 UI / UX REQUIREMENTS
+
+Clean, modern, professional UI
+
+Mobile-responsive design
+
+Clear status indicators:
+
+Pending (yellow)
+
+Approved (green)
+
+Rejected (red)
+
+Simple, intuitive forms
+
+Dashboards designed for:
+
+Quick decision (resident)
+
+Fast verification (guard)
+
+🧰 TECHNOLOGY STACK (MANDATORY)
+Frontend
+
+React
+
+Tailwind CSS
+
+Axios for API calls
+
+Backend
+
+Django
+
+Django REST Framework
+
+JWT or session authentication
+
+Database
+
+PostgreSQL
+
+Architecture
+
+Frontend and backend separated
+
+REST APIs
+
+Environment-based configuration
+
+🚀 DEPLOYMENT EXPECTATION
+
+App must be deployable on free cloud platforms
+
+Use environment variables
+
+Database must persist data
+
+URLs must be public and testable
+
+🧱 DEVELOPMENT APPROACH (STEP-BY-STEP)
+
+Build the project in this order:
+
+Backend models and database schema
+
+Authentication and user roles
+
+Visitor request APIs
+
+Resident approval logic
+
+Guard verification APIs
+
+Frontend visitor flow
+
+Frontend dashboards
+
+Live data updates
+
+UI/UX polish
+
+Deployment readiness
+
+🎓 PROJECT GOAL
+
+This project is built to:
+
+Solve a real-world problem
+
+Demonstrate full-stack engineering skills
+
+Be resume-worthy
+
+Be explainable in interviews
+
+Reflect real production thinking
+
+Avoid shortcuts, mock data, or oversimplifications.
+
+✅ OUTPUT EXPECTATION FROM YOU (REPLIT)
+
+Fully working full-stack project
+
+Clean folder structure
+
+Meaningful variable and function names
+
+Scalable architecture
+
+Best practices followed
+
+Code that a student can learn from
+
+End of prompt. Treat this as the single source of truth.

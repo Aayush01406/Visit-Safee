@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Push Test - VisitSafe</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button { background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }
+        button:hover { background-color: #0056b3; }
+        input { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔔 VisitSafe Push Test (Vercel)</h1>
+        
+        <div id="status"></div>
+        
+        <input type="text" id="residencyId" placeholder="Residency ID" />
+        <input type="text" id="flatId" placeholder="Flat ID" />
+        
+        <button onclick="requestPermission()">1. Request Permission</button>
+        <button onclick="testPush()" id="testBtn" disabled>2. Test Push</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        function showStatus(message, type = 'info') {
+            document.getElementById('status').innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        function addResult(message, type = 'info') {
+            document.getElementById('results').innerHTML += `<div class="status ${type}">${message}</div>`;
+        }
+
+        async function requestPermission() {
+            try {
+                if (!('Notification' in window)) {
+                    showStatus('Notifications not supported', 'error');
+                    return;
+                }
+
+                const permission = await Notification.requestPermission();
+                
+                if (permission === 'granted') {
+                    showStatus('✅ Permission granted!', 'success');
+                    document.getElementById('testBtn').disabled = false;
+                    
+                    const registration = await navigator.serviceWorker.register('/service-worker.js');
+                    addResult('✅ Service worker registered', 'success');
+                } else {
+                    showStatus('❌ Permission denied', 'error');
+                }
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testPush() {
+            const residencyId = document.getElementById('residencyId').value;
+            const flatId = document.getElementById('flatId').value;
+            
+            if (!residencyId || !flatId) {
+                showStatus('Please enter Residency ID and Flat ID', 'error');
+                return;
+            }
+
+            try {
+                showStatus('Sending test push...', 'info');
+                
+                const response = await fetch('/api/send-push', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        residencyId: residencyId,
+                        flatId: flatId,
+                        title: 'Test Notification',
+                        body: 'This is a test from Vercel!',
+                        data: { type: 'test', requestId: 'test-' + Date.now() }
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showStatus(`✅ Success! Sent: ${result.sent}, Failed: ${result.failed}`, 'success');
+                } else {
+                    showStatus(`❌ Error: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Network Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Check initial permission
+        window.addEventListener('load', () => {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                showStatus('✅ Notifications already enabled', 'success');
+                document.getElementById('testBtn').disabled = false;
+            } else {
+                showStatus('🔔 Click "Request Permission" to enable notifications', 'info');
+            }
+        });
+    </script>
+</body>
+</html>
