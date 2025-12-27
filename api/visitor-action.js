@@ -1,1 +1,41 @@
-const admin = require('firebase-admin');\n\n// Initialize Firebase Admin\nif (!admin.apps.length) {\n  try {\n    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);\n    admin.initializeApp({\n      credential: admin.credential.cert(serviceAccount)\n    });\n  } catch (error) {\n    console.error('Firebase Admin initialization failed:', error);\n  }\n}\n\nexport default async function handler(req, res) {\n  if (req.method !== 'POST') {\n    return res.status(405).json({ error: 'Method Not Allowed' });\n  }\n\n  if (!admin.apps.length) {\n    return res.status(500).json({ error: 'Server configuration missing' });\n  }\n\n  try {\n    const { action, requestId, residencyId } = req.body;\n\n    if (!action || !requestId) {\n      return res.status(400).json({ error: 'Missing action or requestId' });\n    }\n\n    const status = action === 'approve' ? 'approved' : 'rejected';\n    const db = admin.firestore();\n    \n    // Update visitor request status\n    if (residencyId) {\n      const docRef = db.collection('residencies').doc(residencyId).collection('visitor_requests').doc(requestId);\n      await docRef.update({\n        status,\n        updatedAt: admin.firestore.FieldValue.serverTimestamp(),\n        actionBy: 'notification'\n      });\n    }\n\n    return res.status(200).json({ success: true, status });\n  } catch (error) {\n    console.error('Error updating visitor request:', error);\n    return res.status(500).json({ error: error.message });\n  }\n}
+import admin from 'firebase-admin';
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(
+      JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+    ),
+  });
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  try {
+    const { action, requestId, residencyId } = req.body;
+
+    if (!action || !requestId) {
+      return res.status(400).json({ error: 'Missing action or requestId' });
+    }
+
+    const status = action === 'approve' ? 'approved' : 'rejected';
+    const db = admin.firestore();
+    
+    // Update visitor request status
+    if (residencyId) {
+      const docRef = db.collection('residencies').doc(residencyId).collection('visitor_requests').doc(requestId);
+      await docRef.update({
+        status,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        actionBy: 'notification'
+      });
+    }
+
+    return res.status(200).json({ success: true, status });
+  } catch (error) {
+    console.error('Error updating visitor request:', error);
+    return res.status(500).json({ error: error.message });
+  }
+}

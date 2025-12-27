@@ -1,24 +1,16 @@
-const admin = require('firebase-admin');
+import admin from 'firebase-admin';
 
-// Initialize Firebase Admin
 if (!admin.apps.length) {
-  try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-  } catch (error) {
-    console.error('Firebase Admin initialization failed:', error);
-  }
+  admin.initializeApp({
+    credential: admin.credential.cert(
+      JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+    ),
+  });
 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-
-  if (!admin.apps.length) {
-    return res.status(500).json({ error: 'Server configuration missing' });
   }
 
   try {
@@ -55,54 +47,40 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'No registered devices found' });
     }
 
-    // Send multicast message with action buttons
-    const message = {
-      notification: {
-        title: title || 'New Visitor Request',
-        body: body || 'You have a new visitor request.',
-      },
-      data: {
-        ...data,
-        requestId: data?.requestId || '',
-        visitorName: data?.visitorName || '',
-        flatId: String(flatId)
-      },
-      tokens: tokens,
-      android: {
-        priority: 'high',
+    // Send to each token
+    const promises = tokens.map(token => 
+      admin.messaging().send({
+        token,
         notification: {
-          priority: 'max',
-          channelId: 'visitor_requests',
-          defaultSound: true,
-          visibility: 'public',
-          actions: [
-            { action: 'APPROVE', title: 'Approve' },
-            { action: 'REJECT', title: 'Reject' }
-          ]
-        }
-      },
-      webpush: {
-        headers: {
-          Urgency: 'high'
+          title: title || 'New Visitor Request',
+          body: body || 'You have a new visitor request.'
         },
-        notification: {
-          actions: [
-            { action: 'APPROVE', title: 'Approve' },
-            { action: 'REJECT', title: 'Reject' }
-          ]
+        data: {
+          ...data,
+          requestId: data?.requestId || '',
+          visitorName: data?.visitorName || '',
+          flatId: String(flatId)
         },
-        fcmOptions: {
-          link: '/'
+        webpush: {
+          notification: {
+            requireInteraction: true,
+            actions: [
+              { action: 'APPROVE', title: 'Approve' },
+              { action: 'REJECT', title: 'Reject' }
+            ]
+          }
         }
-      }
-    };
+      })
+    );
 
-    const response = await admin.messaging().sendEachForMulticast(message);
+    const results = await Promise.allSettled(promises);
+    const successful = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
     
     return res.status(200).json({ 
       success: true, 
-      sent: response.successCount, 
-      failed: response.failureCount 
+      sent: successful, 
+      failed: failed 
     });
 
   } catch (error) {
