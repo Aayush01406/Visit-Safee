@@ -55,29 +55,44 @@ export default async function handler(req, res) {
       return res.status(200).json({ message: 'No registered devices found' });
     }
 
-    // Send multicast message
+    // Send multicast message with action buttons
     const message = {
       notification: {
-        title: title || 'New Visitor',
+        title: title || 'New Visitor Request',
         body: body || 'You have a new visitor request.',
       },
-      data: data || {},
+      data: {
+        ...data,
+        requestId: data?.requestId || '',
+        visitorName: data?.visitorName || '',
+        flatId: String(flatId)
+      },
       tokens: tokens,
       android: {
         priority: 'high',
         notification: {
           priority: 'max',
-          channelId: 'visitsafe_visitors',
+          channelId: 'visitor_requests',
           defaultSound: true,
-          visibility: 'public'
+          visibility: 'public',
+          actions: [
+            { action: 'APPROVE', title: 'Approve' },
+            { action: 'REJECT', title: 'Reject' }
+          ]
         }
       },
       webpush: {
         headers: {
           Urgency: 'high'
         },
+        notification: {
+          actions: [
+            { action: 'APPROVE', title: 'Approve' },
+            { action: 'REJECT', title: 'Reject' }
+          ]
+        },
         fcmOptions: {
-          link: data?.url || '/'
+          link: '/'
         }
       }
     };

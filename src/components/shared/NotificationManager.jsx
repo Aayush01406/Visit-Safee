@@ -23,6 +23,9 @@ export function NotificationManager() {
         if ('serviceWorker' in navigator) {
           const registration = await navigator.serviceWorker.register('/service-worker.js');
           console.log('Service Worker registered:', registration);
+          
+          // Wait for service worker to be ready
+          await navigator.serviceWorker.ready;
         }
 
         // Request notification permission
@@ -38,15 +41,34 @@ export function NotificationManager() {
           const messaging = getMessaging(app);
           const registration = await navigator.serviceWorker.ready;
           
-          // Get FCM token
-          const token = await getToken(messaging, {
-            vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
-            serviceWorkerRegistration: registration
-          });
+          // Get FCM token with retry logic
+          let token = null;
+          let retries = 3;
+          
+          while (!token && retries > 0) {
+            try {
+              token = await getToken(messaging, {
+                vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
+                serviceWorkerRegistration: registration
+              });
+              
+              if (token) {
+                console.log('FCM Token generated successfully');
+                await storage.saveUserToken(token);
+                break;
+              }
+            } catch (error) {
+              console.error(`Token generation attempt ${4 - retries} failed:`, error);
+              retries--;
+              if (retries > 0) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
+            }
+          }
 
-          if (token) {
-            console.log('FCM Token generated');
-            await storage.saveUserToken(token);
+          if (!token) {
+            console.error('Failed to generate FCM token after retries');
+            return;
           }
 
           // Handle foreground messages
@@ -54,16 +76,21 @@ export function NotificationManager() {
             console.log('Foreground message received:', payload);
             
             const { title, body, icon } = payload.notification || {};
+            const { requestId, visitorName } = payload.data || {};
             
             // Show notification using service worker
             if (registration) {
-              registration.showNotification(title || 'New Notification', {
-                body: body || 'You have a new message',
+              registration.showNotification(title || 'New Visitor Request', {
+                body: body || `${visitorName} wants to visit`,
                 icon: icon || '/icons/icon-192.png',
                 badge: '/icons/icon-192.png',
-                tag: payload.data?.requestId || 'default',
+                tag: requestId || 'default',
                 data: payload.data,
-                requireInteraction: true
+                requireInteraction: true,
+                actions: [
+                  { action: 'APPROVE', title: 'Approve' },
+                  { action: 'REJECT', title: 'Reject' }
+                ]
               });
             }
           });

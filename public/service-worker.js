@@ -26,17 +26,25 @@ messaging.onBackgroundMessage((payload) => {
   console.log('[service-worker.js] Received background message:', payload);
   
   const { title, body, icon } = payload.notification || {};
-  const { requestId } = payload.data || {};
+  const { requestId, visitorName } = payload.data || {};
 
   const notificationTitle = title || "New Visitor Request";
   const notificationOptions = {
-    body: body || "You have a new visitor",
+    body: body || `${visitorName} wants to visit`,
     icon: icon || "/icons/icon-192.png",
     badge: "/icons/icon-192.png",
     requireInteraction: true,
     vibrate: [200, 100, 200],
     tag: requestId || 'default',
-    data: payload.data || {}
+    data: {
+      requestId,
+      visitorName,
+      url: '/'
+    },
+    actions: [
+      { action: 'APPROVE', title: 'Approve' },
+      { action: 'REJECT', title: 'Reject' }
+    ]
   };
 
   return self.registration.showNotification(notificationTitle, notificationOptions);
@@ -46,19 +54,50 @@ messaging.onBackgroundMessage((payload) => {
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then(windowClients => {
-        // Check if there is already a window/tab open with the target URL
-        for (let client of windowClients) {
-          if (client.url.includes(self.registration.scope) && 'focus' in client) {
-            return client.focus();
-          }
-        }
-        // If not, then open the target URL in a new window/tab
-        if (clients.openWindow) {
-          return clients.openWindow('/');
-        }
+  const { requestId } = event.notification.data || {};
+  
+  if (event.action === 'APPROVE') {
+    // Handle approve action
+    event.waitUntil(
+      fetch('/api/visitor-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve', requestId })
+      }).then(() => {
+        self.registration.showNotification('Visitor Approved', {
+          body: 'Access granted successfully',
+          icon: '/icons/icon-192.png'
+        });
       })
-  );
+    );
+  } else if (event.action === 'REJECT') {
+    // Handle reject action
+    event.waitUntil(
+      fetch('/api/visitor-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reject', requestId })
+      }).then(() => {
+        self.registration.showNotification('Visitor Rejected', {
+          body: 'Access denied',
+          icon: '/icons/icon-192.png'
+        });
+      })
+    );
+  } else {
+    // Default click - open app
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then(windowClients => {
+          for (let client of windowClients) {
+            if (client.url.includes(self.registration.scope) && 'focus' in client) {
+              return client.focus();
+            }
+          }
+          if (clients.openWindow) {
+            return clients.openWindow('/');
+          }
+        })
+    );
+  }
 });
