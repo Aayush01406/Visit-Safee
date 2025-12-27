@@ -43,6 +43,8 @@ export default async function handler(req, res) {
     const normalize = (str) => String(str || "").toUpperCase().replace(/^(BLOCK|TOWER|WING)\s+/, "").trim();
 
     try {
+        console.log(`[SubmitRequest] Resolving resident for FlatId: ${flatId}`);
+
         // Resolve Flat and Block Details
         const flatDoc = await db.collection("residencies").doc(residencyId).collection("flats").doc(String(flatId)).get();
         
@@ -50,6 +52,8 @@ export default async function handler(req, res) {
             const flatData = flatDoc.data();
             const flatNumber = flatData.number;
             const blockId = flatData.blockId;
+            
+            console.log(`[SubmitRequest] Found Flat: ${flatNumber}, BlockId: ${blockId}`);
 
             if (flatNumber && blockId) {
                 const blockDoc = await db.collection("residencies").doc(residencyId).collection("blocks").doc(blockId).get();
@@ -57,26 +61,42 @@ export default async function handler(req, res) {
                 if (blockDoc.exists) {
                     const blockData = blockDoc.data();
                     const blockName = blockData.name;
+                    const targetBlock = normalize(blockName);
+                    
+                    console.log(`[SubmitRequest] Block Name: ${blockName} -> Normalized: ${targetBlock}`);
                     
                     // Fetch residents with matching flat number
                     const residentsRef = db.collection("residencies").doc(residencyId).collection("residents");
-                    const snapshot = await residentsRef.where("flat", "==", flatNumber).get();
+                    const snapshot = await residentsRef.where("flat", "==", String(flatNumber)).get();
                     
-                    const targetBlock = normalize(blockName);
+                    console.log(`[SubmitRequest] Found ${snapshot.size} residents in Flat ${flatNumber}`);
 
                     snapshot.forEach(doc => {
                         const data = doc.data();
                         const residentBlock = normalize(data.block);
                         
+                        console.log(`[SubmitRequest] Checking Resident: ${data.username}, Block: ${data.block} -> Normalized: ${residentBlock}`);
+                        
                         // Match Block Name
                         if (residentBlock === targetBlock) {
                             if (data.fcmToken) {
+                                console.log(`[SubmitRequest] Token found for ${data.username}`);
                                 tokens.push(data.fcmToken);
+                            } else {
+                                console.warn(`[SubmitRequest] No FCM Token for ${data.username}`);
                             }
+                        } else {
+                             console.log(`[SubmitRequest] Block mismatch: ${residentBlock} != ${targetBlock}`);
                         }
                     });
+                } else {
+                    console.warn(`[SubmitRequest] Block doc not found for ID: ${blockId}`);
                 }
+            } else {
+                console.warn(`[SubmitRequest] Flat data missing number or blockId`);
             }
+        } else {
+            console.warn(`[SubmitRequest] Flat doc not found for ID: ${flatId}`);
         }
     } catch (err) {
         console.error("Error resolving resident for notification:", err);
