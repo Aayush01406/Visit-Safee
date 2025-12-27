@@ -37,16 +37,50 @@ export default async function handler(req, res) {
     const requestId = requestRef.id;
 
     // 2. Find Residents to Notify
-    const residentsRef = db.collection("residencies").doc(residencyId).collection("residents");
-    const snapshot = await residentsRef.where("flatId", "==", String(flatId)).get();
-
     const tokens = [];
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      if (data.fcmToken) {
-        tokens.push(data.fcmToken);
-      }
-    });
+
+    // Helper to normalize block names for comparison
+    const normalize = (str) => String(str || "").toUpperCase().replace(/^(BLOCK|TOWER|WING)\s+/, "").trim();
+
+    try {
+        // Resolve Flat and Block Details
+        const flatDoc = await db.collection("residencies").doc(residencyId).collection("flats").doc(String(flatId)).get();
+        
+        if (flatDoc.exists) {
+            const flatData = flatDoc.data();
+            const flatNumber = flatData.number;
+            const blockId = flatData.blockId;
+
+            if (flatNumber && blockId) {
+                const blockDoc = await db.collection("residencies").doc(residencyId).collection("blocks").doc(blockId).get();
+                
+                if (blockDoc.exists) {
+                    const blockData = blockDoc.data();
+                    const blockName = blockData.name;
+                    
+                    // Fetch residents with matching flat number
+                    const residentsRef = db.collection("residencies").doc(residencyId).collection("residents");
+                    const snapshot = await residentsRef.where("flat", "==", flatNumber).get();
+                    
+                    const targetBlock = normalize(blockName);
+
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const residentBlock = normalize(data.block);
+                        
+                        // Match Block Name
+                        if (residentBlock === targetBlock) {
+                            if (data.fcmToken) {
+                                tokens.push(data.fcmToken);
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    } catch (err) {
+        console.error("Error resolving resident for notification:", err);
+    }
 
     // Also notify Admin if needed (optional)
     try {

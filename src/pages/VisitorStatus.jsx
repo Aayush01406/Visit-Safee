@@ -6,13 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { storage } from "@/lib/storage";
 
-export default function VisitorStatus() {
+export default function VisitorStatus({ params: routeParams }) {
   const [status, setStatus] = useState("loading");
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get("id");
-    const residencyId = params.get("residencyId");
+    const queryParams = new URLSearchParams(window.location.search);
+    const id = routeParams?.id || queryParams.get("id");
+    const residencyId = queryParams.get("residencyId");
 
     if (!id) {
       setStatus("not_found");

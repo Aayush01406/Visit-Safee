@@ -162,6 +162,7 @@ function Router() {
       </Route>
       
       <Route path="/visitor-success" component={VisitorStatus} />
+      <Route path="/visitor-status/:id" component={VisitorStatus} />
 
       <Route path="/:societyName/resident/:flatNumber">
         {(params) => (
