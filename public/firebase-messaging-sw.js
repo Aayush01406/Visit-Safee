@@ -164,17 +164,16 @@ self.addEventListener('notificationclick', (event) => {
             
             const isApprovedStatus = String(status).toLowerCase() === 'approved';
             
-            let title = isApprovedStatus ? 'Visitor Approved' : 'Visitor Rejected';
-            let body = isApprovedStatus ? 'Access granted successfully.' : 'Access denied.';
+            let title = isApprovedStatus ? 'Visitor Approved' : 'Request Rejected';
+            let body = isApprovedStatus ? 'Access granted successfully.' : 'Visitor request has been rejected.';
 
             if (isAlreadyProcessed) {
                 title = `Already ${isApprovedStatus ? 'Approved' : 'Rejected'}`;
                 body = `This request was previously ${status}.`;
             } else if (!intentMatched) {
-                // CRITICAL DEBUG: If we sent 'approve' but server says 'reject' (and not already processed)
-                // This shouldn't happen with the new server logic, but if it does:
-                title = `Action Mismatch (${targetAction} -> ${serverAction})`;
-                body = `Server returned status: ${status}`;
+                // Debugging Mismatch
+                title = `System Error`;
+                body = `Action: ${targetAction}, Server: ${serverAction}. Please retry.`;
             }
 
             self.registration.showNotification(title, {

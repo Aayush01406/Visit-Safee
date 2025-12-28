@@ -57,6 +57,10 @@ export default async function handler(req, res) {
     // Normalize action
     let action = actionRaw ? String(actionRaw).toLowerCase().trim() : null;
 
+    // Fix: Explicitly handle "approve_visitor" / "reject_visitor" if passed directly
+    if (action === 'approve_visitor') action = 'approve';
+    if (action === 'reject_visitor') action = 'reject';
+
     log(`Processing action: '${action}' (Raw: ${actionRaw}) for Request: ${requestId}`);
 
     if (!action || !["approve", "reject"].includes(action)) {
