@@ -28,12 +28,19 @@ export default async function handler(req, res) {
     const query = req.query || {};
     const body = req.body || {};
     
-    const action = query.action || body.action;
+    let action = query.action || body.action;
     const residencyId = query.residencyId || body.residencyId;
     const requestId = query.requestId || body.requestId;
     const username = body.username || "notification_action"; // Optional
 
+    if (action) {
+        action = action.toString().toLowerCase().trim();
+    }
+
+    console.log(`[VisitorAction] Processing action: '${action}' for Request: ${requestId}`);
+
     if (!action || !["approve", "reject"].includes(action)) {
+        console.error(`[VisitorAction] Invalid action received: '${action}'`);
         res.status(400).json({ error: "Invalid action" });
         return;
     }

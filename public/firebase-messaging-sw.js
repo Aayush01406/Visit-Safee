@@ -81,6 +81,8 @@ self.addEventListener('notificationclick', (event) => {
     // Perform API call in background
     const url = action === 'APPROVE_VISITOR' ? data.approveUrl : data.rejectUrl;
     
+    console.log(`[SW] Processing action: ${action}, URL: ${url}`);
+
     if (url) {
         const promiseChain = fetch(url, { method: 'POST' })
             .then(response => {
