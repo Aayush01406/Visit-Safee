@@ -2,6 +2,12 @@ import { initAdmin } from './firebaseAdmin.js';
 import admin from "firebase-admin";
 
 export default async function handler(req, res) {
+  const debugLog = [];
+  function log(msg) {
+      console.log(`[VisitorAction] ${msg}`);
+      debugLog.push(msg);
+  }
+
   try {
     // Allow GET (for direct links) and POST (for programmatic calls)
     if (req.method !== "POST" && req.method !== "GET") {
@@ -9,7 +15,7 @@ export default async function handler(req, res) {
         return;
     }
 
-    console.log(`[VisitorAction] Received ${req.method} request`);
+    log(`Received ${req.method} request`);
 
     try {
         initAdmin();
@@ -49,11 +55,15 @@ export default async function handler(req, res) {
     // Normalize action
     let action = actionRaw ? String(actionRaw).toLowerCase().trim() : null;
 
-    console.log(`[VisitorAction] Processing action: '${action}' for Request: ${requestId}`);
+    log(`Processing action: '${action}' (Raw: ${actionRaw}) for Request: ${requestId}`);
 
     if (!action || !["approve", "reject"].includes(action)) {
         console.error(`[VisitorAction] Invalid action received: '${actionRaw}'`);
-        res.status(400).json({ error: "Invalid action", received: actionRaw });
+        res.status(400).json({ 
+            error: "Invalid action", 
+            received: actionRaw,
+            debug: debugLog
+        });
         return;
     }
     
@@ -72,7 +82,6 @@ export default async function handler(req, res) {
     const doc = await docRef.get();
     if (!doc.exists) {
         if (req.method === "GET") {
-             // Even if not found, redirect to home to avoid 404/500 to user
              console.error("Request not found:", requestId);
              res.redirect(302, "/");
         } else {
@@ -85,17 +94,20 @@ export default async function handler(req, res) {
     
     // If attempting to approve/reject, check if it's already done
     if (currentStatus !== "pending") {
-        console.log(`[VisitorAction] Request ${requestId} already processed. Current status: ${currentStatus}`);
+        log(`Request ${requestId} already processed. Current status: ${currentStatus}`);
+        
+        // CORRECTION: If the user sends "approve", and it is ALREADY "approved", return success/approved.
+        // If the user sends "approve", but it is "rejected", return success/rejected (with message).
+        
         if (req.method === "GET") {
              res.redirect(302, "/");
         } else {
-             // Return success but indicate it was already processed
-             // IMPORTANT: Return the ACTUAL current status so the UI knows
              res.status(200).json({ 
                  success: true, 
-                 message: "Request already processed", 
+                 message: `Request already ${currentStatus}`, 
                  status: currentStatus,
-                 inputAction: action // Debugging
+                 inputAction: action,
+                 debug: debugLog
              });
         }
         return;
@@ -108,21 +120,25 @@ export default async function handler(req, res) {
         actionBy: username,
     });
 
-    console.log(`[VisitorAction] Successfully updated request ${requestId} to ${status}`);
+    log(`Successfully updated request ${requestId} to ${status}`);
 
     if (req.method === "GET") {
-        // Redirect to root if accessed via browser (fallback for old SW)
         res.redirect(302, "/");
     } else {
-        res.status(200).json({ success: true, status, inputAction: action });
+        // Return explicit confirmation of what happened
+        res.status(200).json({ 
+            success: true, 
+            status, 
+            inputAction: action,
+            debug: debugLog 
+        });
     }
   } catch (error) {
     console.error("Visitor Action Error:", error);
     if (req.method === "GET") {
-        // Redirect to home on error to be safe for user experience
         res.redirect(302, "/");
     } else {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: error.message, debug: debugLog });
     }
   }
 }

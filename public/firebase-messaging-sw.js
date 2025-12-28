@@ -1,4 +1,4 @@
-const CACHE_NAME = 'visitsafe-v2';
+const CACHE_NAME = 'visitsafe-v3-debug'; // Bumped version
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -30,7 +30,7 @@ if (firebaseConfig.apiKey) {
 
     // Background Message Handler with Action Buttons
     messaging.onBackgroundMessage((payload) => {
-      console.log('[firebase-messaging-sw.js] Received background message ', payload);
+      console.log('[SW] Received background message ', payload);
       
       const { title, body, icon } = payload.notification || {};
       const data = payload.data || {};
@@ -100,23 +100,21 @@ self.addEventListener('notificationclick', (event) => {
             const urlObj = new URL(urlStr);
             if (!requestId) requestId = urlObj.searchParams.get('requestId');
             if (!residencyId) residencyId = urlObj.searchParams.get('residencyId');
-            console.log(`[SW] Extracted missing data from URL: requestId=${requestId}, residencyId=${residencyId}`);
         } catch (e) {
             console.error('[SW] Failed to parse approveUrl for fallback data', e);
         }
     }
 
     // Construct absolute URL for the API
-    // We rely on QUERY PARAMS for the action to ensure it is passed correctly even if body parsing fails
     const apiUrl = new URL('/api/visitor-action', self.location.origin);
     
+    // Set Query Params (Primary Method)
     if (targetAction) apiUrl.searchParams.set('action', targetAction);
     if (requestId) apiUrl.searchParams.set('requestId', requestId);
     if (residencyId) apiUrl.searchParams.set('residencyId', residencyId);
 
     console.log(`[SW] Sending request to: ${apiUrl.href}`);
 
-    // We still send a body just in case, but we prioritize the URL param for the action
     const requestBody = {
         action: targetAction,
         requestId: requestId,
@@ -133,7 +131,7 @@ self.addEventListener('notificationclick', (event) => {
     .then(async response => {
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`API request failed: ${response.status} ${errorText}`);
+            throw new Error(`API ${response.status}: ${errorText}`);
         }
         return response.json();
     })
@@ -141,25 +139,29 @@ self.addEventListener('notificationclick', (event) => {
         console.log('Action success:', responseData);
         
         if (responseData.success) {
-            // Determine display status
-            // TRUST THE INTENT: If the user clicked Approve, and the server said "success", assume it's Approved.
-            // Only override if the server explicitly says "already processed" and gives a different status.
+            // Determine display status based on SERVER response
+            let status = responseData.status; // "approved" or "rejected"
             
-            let status = isApprove ? 'approved' : 'rejected';
+            // Validation: Did the server do what we asked?
+            const serverAction = responseData.inputAction; // "approve" or "reject"
+            const intentMatched = targetAction === serverAction;
             
-            // If already processed, trust the server's status
-            if (responseData.message && responseData.message.includes('already processed')) {
-                status = responseData.status || status;
-            }
+            // If the status is NOT what we expected, check if it was already processed
+            const isAlreadyProcessed = responseData.message && responseData.message.includes('already');
             
-            const isApprovedStatus = status.toLowerCase() === 'approved';
+            const isApprovedStatus = String(status).toLowerCase() === 'approved';
             
             let title = isApprovedStatus ? 'Visitor Approved' : 'Visitor Rejected';
             let body = isApprovedStatus ? 'Access granted successfully.' : 'Access denied.';
 
-            if (responseData.message && responseData.message.includes('already processed')) {
-                title = `Request Already ${isApprovedStatus ? 'Approved' : 'Rejected'}`;
+            if (isAlreadyProcessed) {
+                title = `Already ${isApprovedStatus ? 'Approved' : 'Rejected'}`;
                 body = `This request was previously ${status}.`;
+            } else if (!intentMatched) {
+                // CRITICAL DEBUG: If we sent 'approve' but server says 'reject' (and not already processed)
+                // This shouldn't happen with the new server logic, but if it does:
+                title = `Action Mismatch (${targetAction} -> ${serverAction})`;
+                body = `Server returned status: ${status}`;
             }
 
             self.registration.showNotification(title, {
@@ -173,8 +175,8 @@ self.addEventListener('notificationclick', (event) => {
     })
     .catch(err => {
         console.error('Action failed:', err);
-        self.registration.showNotification('Action Failed', {
-            body: `Error: ${err.message}`,
+        self.registration.showNotification('Action Error', {
+            body: `Cmd: ${targetAction}, Err: ${err.message}`,
             icon: '/icons/icon-192.png',
             data: { type: 'action_confirmation' }
         });
