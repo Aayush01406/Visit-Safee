@@ -76,7 +76,14 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {};
   
   event.notification.close();
+
+  // 1. Handle "Action Confirmation" notifications (Success/Fail messages)
+  // If the user clicks these, we just dismiss them. Do NOT open the app.
+  if (data.type === 'action_confirmation') {
+      return;
+  }
   
+  // 2. Handle Action Buttons (Approve / Reject)
   if (action === 'APPROVE_VISITOR' || action === 'REJECT_VISITOR') {
     const isApprove = action === 'APPROVE_VISITOR';
     const targetAction = isApprove ? 'approve' : 'reject';
@@ -107,14 +114,14 @@ self.addEventListener('notificationclick', (event) => {
     .then(responseData => {
         console.log('Action success:', responseData);
         // User requested NOT to open the app on action. 
-        // We just log success. 
-        // Optionally we could show a silent notification confirming success if needed.
+        // We just log success and show a confirmation notification.
         if (responseData.success) {
             self.registration.showNotification(isApprove ? 'Visitor Approved' : 'Visitor Rejected', {
                 body: isApprove ? 'Access granted successfully.' : 'Access denied.',
                 icon: '/icons/icon-192.png',
                 badge: '/icons/icon-192.png',
-                timeout: 3000 // Auto close after 3 seconds if supported or just let it sit
+                data: { type: 'action_confirmation' }, // Tag this so clicking it doesn't open app
+                timeout: 3000
             });
         }
     })
@@ -123,13 +130,15 @@ self.addEventListener('notificationclick', (event) => {
         // Show error notification instead of opening app
         self.registration.showNotification('Action Failed', {
             body: 'Could not process visitor request. Please try again.',
-            icon: '/icons/icon-192.png'
+            icon: '/icons/icon-192.png',
+            data: { type: 'action_confirmation' }
         });
     });
 
     event.waitUntil(promiseChain);
   } else {
-    // Default click - open app
+    // 3. Default click (Body click) - Open app
+    // Only open app if it's NOT a background action
     const urlToOpen = data.click_action || '/';
     event.waitUntil(
       clients.matchAll({ type: 'window', includeUncontrolled: true })
