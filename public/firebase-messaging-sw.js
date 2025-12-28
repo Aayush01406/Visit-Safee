@@ -1,4 +1,4 @@
-const CACHE_NAME = 'visitsafe-v3-debug'; // Bumped version
+const CACHE_NAME = 'visitsafe-v4-connected'; // Bumped version for connected logic
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -92,6 +92,7 @@ self.addEventListener('notificationclick', (event) => {
     // Robust data extraction
     let requestId = data.requestId || data.visitorId;
     let residencyId = data.residencyId;
+    let residentId = data.residentId;
 
     // Fallback: Extract from approveUrl/rejectUrl if missing
     if ((!requestId || !residencyId) && (data.approveUrl || data.rejectUrl)) {
@@ -118,7 +119,8 @@ self.addEventListener('notificationclick', (event) => {
     const requestBody = {
         action: targetAction,
         requestId: requestId,
-        residencyId: residencyId
+        residencyId: residencyId,
+        residentId: residentId
     };
 
     const promiseChain = fetch(apiUrl.href, { 

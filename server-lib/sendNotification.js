@@ -123,6 +123,7 @@ export default async function handler(req, res) {
             visitorId: data.visitorId,
             requestId: data.visitorId, // Ensure requestId is passed
             residencyId: residencyId, // Ensure residencyId is passed
+            residentId: residentId, // Pass the resident ID for tracking actions
             actionType: 'VISITOR_REQUEST',
             approvalToken: data.approvalToken,
             approveUrl: data.approveUrl,

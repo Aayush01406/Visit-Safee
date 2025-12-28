@@ -50,6 +50,7 @@ export default async function handler(req, res) {
     let actionRaw = body.action || query.action;
     let residencyId = body.residencyId || query.residencyId;
     let requestId = body.requestId || query.requestId;
+    let residentId = body.residentId || query.residentId;
     const username = body.username || "notification_action";
 
     // Normalize action
@@ -113,12 +114,22 @@ export default async function handler(req, res) {
         return;
     }
 
-    // Update Firestore
-    await docRef.update({
+    // Update Firestore with detailed fields (matching visitorDecision.js logic)
+    const updateData = {
         status,
         updatedAt: new Date().toISOString(),
-        actionBy: username,
-    });
+        actionBy: residentId || username,
+    };
+
+    if (status === 'approved') {
+        updateData.approvedBy = residentId || username;
+        updateData.approvedAt = new Date().toISOString();
+    } else {
+        updateData.rejectedBy = residentId || username;
+        updateData.rejectedAt = new Date().toISOString();
+    }
+
+    await docRef.update(updateData);
 
     log(`Successfully updated request ${requestId} to ${status}`);
 
