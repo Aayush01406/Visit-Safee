@@ -56,9 +56,18 @@ export default async function handler(req, res) {
       actionBy: username,
     });
 
-    res.status(200).json({ success: true, status });
+    if (req.method === "GET") {
+        // Redirect to root if accessed via browser (fallback for old SW)
+        res.redirect(302, "/");
+    } else {
+        res.status(200).json({ success: true, status });
+    }
   } catch (error) {
     console.error("Visitor Action Error:", error);
-    res.status(500).json({ error: error.message });
+    if (req.method === "GET") {
+        res.status(500).send(`Error: ${error.message}`);
+    } else {
+        res.status(500).json({ error: error.message });
+    }
   }
 }

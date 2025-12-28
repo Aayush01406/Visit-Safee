@@ -406,8 +406,9 @@ class StorageService {
     // Send notification with approval URLs
     try {
       const baseUrl = window.location.origin;
-      const approveUrl = `${baseUrl}/resident/decision?visitorId=${visitorId}&token=${approvalToken}&action=approve`;
-      const rejectUrl = `${baseUrl}/resident/decision?visitorId=${visitorId}&token=${approvalToken}&action=reject`;
+      // Point to API directly for background handling
+      const approveUrl = `${baseUrl}/api/visitor-action?action=approve&residencyId=${residencyId}&requestId=${visitorId}`;
+      const rejectUrl = `${baseUrl}/api/visitor-action?action=reject&residencyId=${residencyId}&requestId=${visitorId}`;
       
       const response = await fetch('/api/sendNotification', {
         method: 'POST',
@@ -421,13 +422,21 @@ class StorageService {
           data: {
             visitorId: visitorId,
             actionType: 'VISITOR_REQUEST',
+            requestId: visitorId, // Add requestId for consistency
+            residencyId: residencyId,
             approvalToken: approvalToken,
             approveUrl: approveUrl,
             rejectUrl: rejectUrl,
+            click_action: "/", // Redirect to root on click
             visitorName: data.visitorName,
             blockName: blockDetails?.name || 'Unknown',
             flatNumber: flatDetails?.number || 'Unknown',
             purpose: data.purpose || 'Visit'
+          },
+          webpush: {
+            fcmOptions: {
+                link: "/"
+            }
           }
         })
       });
