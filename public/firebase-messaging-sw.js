@@ -78,49 +78,64 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
   if (action === 'APPROVE_VISITOR' || action === 'REJECT_VISITOR') {
-    // Perform API call in background
-    const url = action === 'APPROVE_VISITOR' ? data.approveUrl : data.rejectUrl;
+    const isApprove = action === 'APPROVE_VISITOR';
+    const targetAction = isApprove ? 'approve' : 'reject';
     
-    console.log(`[SW] Processing action: ${action}, URL: ${url}`);
+    console.log(`[SW] Processing action: ${action} -> ${targetAction}`);
+    
+    // Construct absolute URL for the API
+    const apiUrl = new URL('/api/visitor-action', self.location.origin).href;
 
-    if (url) {
-        const promiseChain = fetch(url, { method: 'POST' })
-            .then(response => {
-                if (!response.ok) throw new Error('API request failed');
-                return response.json();
-            })
-            .then(responseData => {
-                console.log('Action success:', responseData);
-                // Open/Focus app to show updated status
-                return clients.matchAll({ type: 'window', includeUncontrolled: true })
-                    .then(windowClients => {
-                        // Try to focus existing window
-                        for (let client of windowClients) {
-                            if (client.url.includes(self.location.origin) && 'focus' in client) {
-                                return client.focus();
-                            }
+    // Use JSON body for robustness
+    const requestBody = {
+        action: targetAction,
+        requestId: data.requestId,
+        residencyId: data.residencyId
+    };
+
+    const promiseChain = fetch(apiUrl, { 
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+    })
+    .then(response => {
+        if (!response.ok) throw new Error('API request failed');
+        return response.json();
+    })
+    .then(responseData => {
+        console.log('Action success:', responseData);
+        // Open/Focus app to show updated status
+        return clients.matchAll({ type: 'window', includeUncontrolled: true })
+            .then(windowClients => {
+                // Try to focus existing window
+                for (let client of windowClients) {
+                    if (client.url.includes(self.location.origin) && 'focus' in client) {
+                        // Optionally navigate to status page
+                        if (responseData.success) {
+                             const statusUrl = `/visitor-success?id=${data.requestId}&residencyId=${data.residencyId}`;
+                             client.navigate(statusUrl);
                         }
-                        // Open new window if none exists
-                        if (clients.openWindow) {
-                            return clients.openWindow('/');
-                        }
-                    });
-            })
-            .catch(err => {
-                console.error('Action failed:', err);
-                // Fallback: Open window to API or app to let user retry
+                        return client.focus();
+                    }
+                }
+                // Open new window if none exists
                 if (clients.openWindow) {
-                    return clients.openWindow('/');
+                    const statusUrl = `/visitor-success?id=${data.requestId}&residencyId=${data.residencyId}`;
+                    return clients.openWindow(statusUrl);
                 }
             });
-
-        event.waitUntil(promiseChain);
-    } else {
-        console.error('No action URL provided in notification data');
+    })
+    .catch(err => {
+        console.error('Action failed:', err);
+        // Fallback: Open window to API or app to let user retry
         if (clients.openWindow) {
-            event.waitUntil(clients.openWindow('/'));
+            return clients.openWindow('/');
         }
-    }
+    });
+
+    event.waitUntil(promiseChain);
   } else {
     // Default click - open app
     const urlToOpen = data.click_action || '/';

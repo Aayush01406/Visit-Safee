@@ -28,9 +28,9 @@ export default async function handler(req, res) {
     const query = req.query || {};
     const body = req.body || {};
     
-    let action = query.action || body.action;
-    const residencyId = query.residencyId || body.residencyId;
-    const requestId = query.requestId || body.requestId;
+    let action = body.action || query.action; // Prefer body now
+    const residencyId = body.residencyId || query.residencyId; // Prefer body now
+    const requestId = body.requestId || query.requestId; // Prefer body now
     const username = body.username || "notification_action"; // Optional
 
     if (action) {
