@@ -128,7 +128,7 @@ self.addEventListener('notificationclick', (event) => {
         headers: {
             'Content-Type': 'application/json'
         },
-        credentials: 'include', // Important: Send cookies/auth data
+        // credentials: 'include', // REMOVED to avoid CORS/Network issues
         body: JSON.stringify(requestBody)
     })
     .then(async response => {
@@ -143,8 +143,20 @@ self.addEventListener('notificationclick', (event) => {
         // User requested NOT to open the app on action. 
         // We just log success and show a confirmation notification.
         if (responseData.success) {
-            self.registration.showNotification(isApprove ? 'Visitor Approved' : 'Visitor Rejected', {
-                body: isApprove ? 'Access granted successfully.' : 'Access denied.',
+            const status = responseData.status || (isApprove ? 'approved' : 'rejected');
+            const isApprovedStatus = status.toLowerCase() === 'approved';
+            
+            let title = isApprovedStatus ? 'Visitor Approved' : 'Visitor Rejected';
+            let body = isApprovedStatus ? 'Access granted successfully.' : 'Access denied.';
+
+            // Handle case where request was already processed
+            if (responseData.message && responseData.message.includes('already processed')) {
+                title = `Request Already ${isApprovedStatus ? 'Approved' : 'Rejected'}`;
+                body = `This request was previously ${status}.`;
+            }
+
+            self.registration.showNotification(title, {
+                body: body,
                 icon: '/icons/icon-192.png',
                 badge: '/icons/icon-192.png',
                 data: { type: 'action_confirmation' }, // Tag this so clicking it doesn't open app

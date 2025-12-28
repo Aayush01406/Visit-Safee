@@ -26,25 +26,38 @@ export default async function handler(req, res) {
 
     // Support both body and query params (for Service Worker fetch)
     const query = req.query || {};
-    const body = req.body || {};
+    let body = req.body || {};
     
-    let action = body.action || query.action; // Prefer body now
-    const residencyId = body.residencyId || query.residencyId; // Prefer body now
-    const requestId = body.requestId || query.requestId; // Prefer body now
-    const username = body.username || "notification_action"; // Optional
-
-    if (action) {
-        action = action.toString().toLowerCase().trim();
+    // Handle case where body is a string (not parsed by middleware)
+    if (typeof body === 'string') {
+        try {
+            body = JSON.parse(body);
+        } catch (e) {
+            console.warn('[VisitorAction] Failed to parse body string:', e);
+            body = {};
+        }
     }
+    
+    // Extract parameters with priority
+    // 1. Check Body
+    // 2. Check Query
+    let actionRaw = body.action || query.action;
+    let residencyId = body.residencyId || query.residencyId;
+    let requestId = body.requestId || query.requestId;
+    const username = body.username || "notification_action";
+
+    // Normalize action
+    let action = actionRaw ? String(actionRaw).toLowerCase().trim() : null;
 
     console.log(`[VisitorAction] Processing action: '${action}' for Request: ${requestId}`);
 
     if (!action || !["approve", "reject"].includes(action)) {
-        console.error(`[VisitorAction] Invalid action received: '${action}'`);
+        console.error(`[VisitorAction] Invalid action received: '${actionRaw}'`);
         res.status(400).json({ error: "Invalid action" });
         return;
     }
     
+    // STRICT status assignment
     const status = action === "approve" ? "approved" : "rejected";
 
     if (!residencyId || !requestId) {
@@ -69,20 +82,32 @@ export default async function handler(req, res) {
     }
     
     const currentStatus = doc.data().status;
+    
+    // If attempting to approve/reject, check if it's already done
     if (currentStatus !== "pending") {
+        console.log(`[VisitorAction] Request ${requestId} already processed. Current status: ${currentStatus}`);
         if (req.method === "GET") {
              res.redirect(302, "/");
         } else {
-             res.status(200).json({ success: true, message: "Request already processed", status: currentStatus });
+             // Return success but indicate it was already processed
+             // IMPORTANT: Return the ACTUAL current status so the UI knows
+             res.status(200).json({ 
+                 success: true, 
+                 message: "Request already processed", 
+                 status: currentStatus 
+             });
         }
         return;
     }
 
+    // Update Firestore
     await docRef.update({
         status,
         updatedAt: new Date().toISOString(),
         actionBy: username,
     });
+
+    console.log(`[VisitorAction] Successfully updated request ${requestId} to ${status}`);
 
     if (req.method === "GET") {
         // Redirect to root if accessed via browser (fallback for old SW)
