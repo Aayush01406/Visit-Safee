@@ -66,7 +66,7 @@ if (firebaseConfig.apiKey) {
           {
             action: 'REJECT_VISITOR', 
             title: '❌ Reject',
-            icon: '/icons/x.png'
+            icon: '/icons/cross.png'
           }
         ];
       }
