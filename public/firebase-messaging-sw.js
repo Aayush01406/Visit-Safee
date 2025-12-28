@@ -109,9 +109,12 @@ self.addEventListener('notificationclick', (event) => {
 
     // Construct absolute URL for the API with query params as fallback
     const apiUrl = new URL('/api/visitor-action', self.location.origin);
-    if (targetAction) apiUrl.searchParams.append('action', targetAction);
-    if (requestId) apiUrl.searchParams.append('requestId', requestId);
-    if (residencyId) apiUrl.searchParams.append('residencyId', residencyId);
+    // Explicitly set action, requestId, and residencyId in the URL params for safety
+    if (targetAction) apiUrl.searchParams.set('action', targetAction);
+    if (requestId) apiUrl.searchParams.set('requestId', requestId);
+    if (residencyId) apiUrl.searchParams.set('residencyId', residencyId);
+
+    console.log(`[SW] Sending request to: ${apiUrl.href} with body:`, { action: targetAction, requestId, residencyId });
 
     // Use JSON body for robustness
     const requestBody = {
