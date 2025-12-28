@@ -106,33 +106,25 @@ self.addEventListener('notificationclick', (event) => {
     })
     .then(responseData => {
         console.log('Action success:', responseData);
-        // Open/Focus app to show updated status
-        return clients.matchAll({ type: 'window', includeUncontrolled: true })
-            .then(windowClients => {
-                // Try to focus existing window
-                for (let client of windowClients) {
-                    if (client.url.includes(self.location.origin) && 'focus' in client) {
-                        // Optionally navigate to status page
-                        if (responseData.success) {
-                             const statusUrl = `/visitor-success?id=${data.requestId}&residencyId=${data.residencyId}`;
-                             client.navigate(statusUrl);
-                        }
-                        return client.focus();
-                    }
-                }
-                // Open new window if none exists
-                if (clients.openWindow) {
-                    const statusUrl = `/visitor-success?id=${data.requestId}&residencyId=${data.residencyId}`;
-                    return clients.openWindow(statusUrl);
-                }
+        // User requested NOT to open the app on action. 
+        // We just log success. 
+        // Optionally we could show a silent notification confirming success if needed.
+        if (responseData.success) {
+            self.registration.showNotification(isApprove ? 'Visitor Approved' : 'Visitor Rejected', {
+                body: isApprove ? 'Access granted successfully.' : 'Access denied.',
+                icon: '/icons/icon-192.png',
+                badge: '/icons/icon-192.png',
+                timeout: 3000 // Auto close after 3 seconds if supported or just let it sit
             });
+        }
     })
     .catch(err => {
         console.error('Action failed:', err);
-        // Fallback: Open window to API or app to let user retry
-        if (clients.openWindow) {
-            return clients.openWindow('/');
-        }
+        // Show error notification instead of opening app
+        self.registration.showNotification('Action Failed', {
+            body: 'Could not process visitor request. Please try again.',
+            icon: '/icons/icon-192.png'
+        });
     });
 
     event.waitUntil(promiseChain);
