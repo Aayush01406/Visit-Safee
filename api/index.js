@@ -1,3 +1,4 @@
+
 import createOwner from '../server-lib/createOwner.js';
 import broadcastNotification from '../server-lib/broadcastNotification.js';
 import deleteResidency from '../server-lib/deleteResidency.js';
@@ -5,22 +6,21 @@ import importResidents from '../server-lib/importResidents.js';
 import ownerLogin from '../server-lib/ownerLogin.js';
 import ownerResidencies from '../server-lib/ownerResidencies.js';
 import registerResidency from '../server-lib/registerResidency.js';
+import notifyResident from '../server-lib/notifyResident.js';
 import residencyStatus from '../server-lib/residencyStatus.js';
 import toggleService from '../server-lib/toggleService.js';
 import updateRequestStatus from '../server-lib/update-request-status.js';
 import uploadResidentsFromPDF from '../server-lib/uploadResidentsFromPDF.js';
-import sendPush from '../server-lib/send-push.js';
-import submitVisitorRequest from '../server-lib/submitVisitorRequest.js';
-import visitorAction from '../server-lib/visitor-action.js';
+import sendNotification from '../server-lib/sendNotification.js';
+import visitorDetails from '../server-lib/visitorDetails.js';
+import visitorDecision from '../server-lib/visitorDecision.js';
 
 const handlers = {
   createOwner,
   'broadcast-notification': broadcastNotification,
-  'submit-visitor-request': submitVisitorRequest,
-  'send-push': sendPush,
-  'visitor-action': visitorAction,
   deleteResidency,
   importResidents,
+  'notify-resident': notifyResident,
   ownerLogin,
   ownerResidencies,
   registerResidency,
@@ -28,13 +28,16 @@ const handlers = {
   toggleService,
   'update-request-status': updateRequestStatus,
   uploadResidentsFromPDF,
+  sendNotification,
+  'visitor-details': visitorDetails,
+  'visitor-decision': visitorDecision,
 };
 
 export default async function handler(req, res) {
   // Parse the route from the URL
   // Expected format: /api/<route_name>?...
   const url = new URL(req.url, `http://${req.headers.host}`);
-  const pathname = url.pathname.replace(/\/$/, '');
+  const pathname = url.pathname;
   
   // Extract the last segment of the path as the route name
   // e.g. /api/createOwner -> createOwner

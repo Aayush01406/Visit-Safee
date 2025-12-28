@@ -370,25 +370,76 @@ class StorageService {
   async createPublicVisitorRequest(data, residencyId, residencyName) {
     if (!residencyId) throw new Error("Residency ID is required");
     
-    // Call API instead of direct Firestore write
-    const response = await fetch('/api/submit-visitor-request', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            ...data,
-            residencyId
-        }),
-    });
+    // Generate approval token
+    const approvalToken = crypto.randomUUID();
+    
+    const docData = {
+      ...data,
+      status: 'pending',
+      approvalToken: approvalToken,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
 
-    if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Failed to submit request");
+    const docRef = await addDoc(collection(db, "residencies", residencyId, "visitor_requests"), docData);
+    const visitorId = docRef.id;
+    
+    // Get flat and block details for notification
+    let flatDetails = null;
+    let blockDetails = null;
+    
+    try {
+      const flatDoc = await getDoc(doc(db, "residencies", residencyId, "flats", data.flatId));
+      if (flatDoc.exists()) {
+        flatDetails = flatDoc.data();
+        if (flatDetails.blockId) {
+          const blockDoc = await getDoc(doc(db, "residencies", residencyId, "blocks", flatDetails.blockId));
+          if (blockDoc.exists()) {
+            blockDetails = blockDoc.data();
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching flat/block details:', error);
+    }
+    
+    // Send notification with approval URLs
+    try {
+      const baseUrl = window.location.origin;
+      const approveUrl = `${baseUrl}/resident/decision?visitorId=${visitorId}&token=${approvalToken}&action=approve`;
+      const rejectUrl = `${baseUrl}/resident/decision?visitorId=${visitorId}&token=${approvalToken}&action=reject`;
+      
+      const response = await fetch('/api/sendNotification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          residencyId,
+          title: 'New Visitor Request',
+          body: `${data.visitorName} wants to visit ${blockDetails?.name || 'Block'} ${flatDetails?.number || 'Flat'}`,
+          targetType: 'specific_flat',
+          targetId: data.flatId,
+          data: {
+            visitorId: visitorId,
+            actionType: 'VISITOR_REQUEST',
+            approvalToken: approvalToken,
+            approveUrl: approveUrl,
+            rejectUrl: rejectUrl,
+            visitorName: data.visitorName,
+            blockName: blockDetails?.name || 'Unknown',
+            flatNumber: flatDetails?.number || 'Unknown',
+            purpose: data.purpose || 'Visit'
+          }
+        })
+      });
+      
+      if (!response.ok) {
+        console.error('Notification failed:', await response.text());
+      }
+    } catch (e) {
+      console.error("Error sending notification:", e);
     }
 
-    const result = await response.json();
-    return result.requestId;
+    return visitorId;
   }
 
   async createVisitorRequest(data) {

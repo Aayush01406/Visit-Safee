@@ -2,12 +2,9 @@
   "name": "society-visitor-app",
   "version": "1.0.0",
   "type": "module",
-  "engines": {
-    "node": ">=18.0.0"
-  },
   "license": "MIT",
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"vite\"",
+    "dev": "vite",
     "server": "node server.js",
     "build": "vite build",
     "preview": "vite preview"

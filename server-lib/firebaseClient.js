@@ -1,6 +1,9 @@
+
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import 'dotenv/config';
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const firebaseConfig = {
   apiKey: process.env.VITE_FIREBASE_API_KEY,
@@ -11,9 +14,6 @@ const firebaseConfig = {
   appId: process.env.VITE_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
-// Check if apps are already initialized to avoid duplication error in some environments
-// (Though for clean module loading it usually runs once)
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 

@@ -12,8 +12,8 @@ export default async function handler(req, res) {
   try {
     const { residencyId, requestId, status, username } = req.body || {};
     
-    if (!residencyId || !requestId || !status) {
-      res.status(400).json({ error: "Missing residencyId, requestId, or status" });
+    if (!requestId || !status) {
+      res.status(400).json({ error: "Missing requestId or status" });
       return;
     }
 
@@ -25,7 +25,28 @@ export default async function handler(req, res) {
     }
 
     const firestore = db();
-    const requestRef = firestore.collection("residencies").doc(residencyId).collection("visitor_requests").doc(requestId);
+    
+    // If residencyId not provided, try to find it from the request
+    let targetResidencyId = residencyId;
+    if (!targetResidencyId) {
+      // Search across all residencies for the request (less efficient but works for service worker calls)
+      const residenciesSnap = await firestore.collection("residencies").get();
+      for (const residencyDoc of residenciesSnap.docs) {
+        const requestRef = residencyDoc.ref.collection("visitor_requests").doc(requestId);
+        const requestSnap = await requestRef.get();
+        if (requestSnap.exists) {
+          targetResidencyId = residencyDoc.id;
+          break;
+        }
+      }
+    }
+    
+    if (!targetResidencyId) {
+      res.status(404).json({ error: "Request not found" });
+      return;
+    }
+    
+    const requestRef = firestore.collection("residencies").doc(targetResidencyId).collection("visitor_requests").doc(requestId);
     
     // 1. Get current request data
     const requestSnap = await requestRef.get();
@@ -43,15 +64,9 @@ export default async function handler(req, res) {
     });
 
     // 3. Send Notification
-    // Logic: 
-    // - If status is 'arrived', notify Resident.
-    // - If status is 'waiting_approval', notify Resident.
-    // - If status is 'approved', notify Guard (optional, but good).
-    
-    // We primarily need to find the resident associated with this request (via flatId)
     const flatId = requestData.flatId;
     if (flatId) {
-       const residentsRef = firestore.collection("residencies").doc(residencyId).collection("residents");
+       const residentsRef = firestore.collection("residencies").doc(targetResidencyId).collection("residents");
        const residentsSnap = await residentsRef.where("flatId", "==", flatId).get();
        
        if (!residentsSnap.empty) {
@@ -76,7 +91,7 @@ export default async function handler(req, res) {
              if (shouldSend) {
                 console.log(`Sending notification to resident ${residentId} for status ${status}`);
                 notificationPromises.push(
-                  sendPushNotification(residencyId, residentId, "resident", { title, body }, { requestId, status })
+                  sendPushNotification(targetResidencyId, residentId, "resident", { title, body }, { requestId, status })
                 );
              }
           });

@@ -1,8 +1,17 @@
 import admin from "firebase-admin";
 import formidable from "formidable";
 import fs from "fs";
-import pdfParse from "pdf-parse";
 import bcrypt from "bcryptjs";
+
+// Fix ESM import for pdf-parse
+let pdfParse;
+try {
+  pdfParse = (await import("pdf-parse")).default;
+} catch (e) {
+  // Fallback for different module systems
+  const pdfParseModule = await import("pdf-parse/lib/pdf-parse.js");
+  pdfParse = pdfParseModule.default || pdfParseModule;
+}
 
 export const config = {
   api: {

@@ -1,6 +1,6 @@
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
-import { app } from "./firebase";
-import { storage } from "./storage";
+import { app, db } from "./firebase";
+import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 
 let messaging = null;
 
@@ -54,10 +54,59 @@ export const requestToken = async () => {
 
       if (token) {
         console.log("FCM Token:", token);
-        await storage.saveUserToken(token);
+        await saveTokenToFirestore(token);
       }
     }
   } catch (error) {
     console.error("Error retrieving token:", error);
+  }
+};
+
+const saveTokenToFirestore = async (token) => {
+  try {
+    const sessionStr = localStorage.getItem("society_user_session");
+    if (!sessionStr) return;
+
+    const session = JSON.parse(sessionStr);
+    if (!session.loggedIn) return;
+
+    const { residencyId, username, role } = session;
+    if (!residencyId || !username) return;
+
+    let userRef = null;
+    let fieldKey = 'fcmToken';
+    let timestampKey = 'fcmUpdatedAt';
+
+    if (role === "admin") {
+       userRef = doc(db, "residencies", residencyId);
+       fieldKey = 'adminFcmToken';
+       timestampKey = 'adminFcmUpdatedAt';
+    } else if (role === "resident") {
+       userRef = doc(db, "residencies", residencyId, "residents", username);
+    } else if (role === "guard") {
+       userRef = doc(db, "residencies", residencyId, "guards", username);
+    }
+
+    if (userRef) {
+      // Prevent duplicate writes: compare existing token
+      const docSnap = await getDoc(userRef);
+      if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data[fieldKey] === token) {
+              console.log("Token already exists in Firestore, skipping write.");
+              return;
+          }
+      }
+
+      // Save token with merge: true to create field if missing
+      await setDoc(userRef, {
+          [fieldKey]: token,
+          [timestampKey]: serverTimestamp()
+      }, { merge: true });
+      
+      console.log("Token saved to Firestore");
+    }
+  } catch (err) {
+    console.error("Error saving token to Firestore:", err);
   }
 };

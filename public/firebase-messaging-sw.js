@@ -13,7 +13,6 @@ importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js')
 importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
 
 // Initialize Firebase using URL params
-// We read the config from the registration URL (location.search)
 const params = new URLSearchParams(self.location.search);
 const firebaseConfig = {
   apiKey: params.get('apiKey'),
@@ -29,86 +28,92 @@ if (firebaseConfig.apiKey) {
     firebase.initializeApp(firebaseConfig);
     const messaging = firebase.messaging();
 
-    // Background Message Handler (Step 4)
+    // Background Message Handler with Action Buttons
     messaging.onBackgroundMessage((payload) => {
       console.log('[firebase-messaging-sw.js] Received background message ', payload);
       
       const { title, body, icon } = payload.notification || {};
-      const { type, actionUrlApprove, actionUrlReject } = payload.data || {};
-
-      const notificationTitle = title || "New Notification";
+      const data = payload.data || {};
+      
+      // Check if this is a visitor request notification
+      const isVisitorRequest = data.actionType === 'VISITOR_REQUEST';
+      
       const notificationOptions = {
         body: body,
         icon: icon || '/icons/icon-192.png',
-        tag: payload.messageId, // Step 6: De-duplication
-        data: payload.data // Store data for click handler
+        badge: '/icons/icon-192.png',
+        tag: data.visitorId || payload.messageId,
+        requireInteraction: isVisitorRequest,
+        data: data
       };
-
-      // Add Actions if it's a visitor request
-      if (type === 'visitor_request' && actionUrlApprove && actionUrlReject) {
-          notificationOptions.actions = [
-              { action: 'approve', title: 'Approve', icon: '/icons/check.png' },
-              { action: 'reject', title: 'Reject', icon: '/icons/x.png' }
-          ];
-          // Keep notification interaction valid for longer
-          notificationOptions.requireInteraction = true;
+      
+      // Add action buttons for visitor requests
+      if (isVisitorRequest && data.visitorId) {
+        notificationOptions.actions = [
+          {
+            action: 'APPROVE_VISITOR',
+            title: '✅ Approve',
+            icon: '/icons/icon-192.png'
+          },
+          {
+            action: 'REJECT_VISITOR', 
+            title: '❌ Reject',
+            icon: '/icons/icon-192.png'
+          }
+        ];
       }
 
-      self.registration.showNotification(notificationTitle, notificationOptions);
+      self.registration.showNotification(title, notificationOptions);
     });
 }
 
-// Handle Notification Clicks
-self.addEventListener('notificationclick', function(event) {
+// Handle notification clicks and actions
+self.addEventListener('notificationclick', (event) => {
+  console.log('[SW] Notification click received:', event);
+  
   event.notification.close();
-
-  const data = event.notification.data;
-
-  if (event.action === 'approve' && data?.actionUrlApprove) {
-      // Handle Approve Action
+  
+  const data = event.notification.data || {};
+  const action = event.action;
+  
+  if (action === 'APPROVE_VISITOR' || action === 'REJECT_VISITOR') {
+    // Open approval page instead of direct API call
+    const approveUrl = data.approveUrl;
+    const rejectUrl = data.rejectUrl;
+    const targetUrl = action === 'APPROVE_VISITOR' ? approveUrl : rejectUrl;
+    
+    if (targetUrl) {
       event.waitUntil(
-          fetch(data.actionUrlApprove, { method: 'POST' })
-            .then(response => response.json())
-            .then(res => {
-                // Show confirmation
-                self.registration.showNotification("Visitor Approved", {
-                    body: "The visitor has been granted entry.",
-                    icon: '/icons/icon-192.png'
-                });
-            })
-            .catch(err => console.error('Approve failed', err))
+        clients.openWindow(targetUrl)
       );
-  } else if (event.action === 'reject' && data?.actionUrlReject) {
-      // Handle Reject Action
+    } else {
+      // Fallback URL construction
+      const visitorId = data.visitorId;
+      const token = data.approvalToken;
+      const actionType = action === 'APPROVE_VISITOR' ? 'approve' : 'reject';
+      const fallbackUrl = `/resident/decision?visitorId=${visitorId}&token=${token}&action=${actionType}`;
+      
       event.waitUntil(
-          fetch(data.actionUrlReject, { method: 'POST' })
-            .then(response => response.json())
-            .then(res => {
-                // Show confirmation
-                self.registration.showNotification("Visitor Rejected", {
-                    body: "The visitor has been denied entry.",
-                    icon: '/icons/icon-192.png'
-                });
-            })
-            .catch(err => console.error('Reject failed', err))
+        clients.openWindow(fallbackUrl)
       );
+    }
   } else {
-      // Default click (open app)
-      event.waitUntil(
-        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
-            // Check if there is already a window open and if so, focus it.
-            for (let i = 0; i < windowClients.length; i++) {
-                const client = windowClients[i];
-                if (client.url.includes(self.location.origin) && 'focus' in client) {
-                    return client.focus();
-                }
+    // Default click - open app
+    const urlToOpen = data.click_action || '/';
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true })
+        .then((clientList) => {
+          for (const client of clientList) {
+            if (client.url.includes(self.location.origin) && 'focus' in client) {
+              client.focus();
+              return;
             }
-            // If no window is open, open one.
-            if (clients.openWindow) {
-                return clients.openWindow('/');
-            }
+          }
+          if (clients.openWindow) {
+            return clients.openWindow(urlToOpen);
+          }
         })
-      );
+    );
   }
 });
 

@@ -70,11 +70,8 @@ export default function VisitorForm({ residencyName }) {
 
     try {
       const requestId = await createRequest({ data, residencyId: residency.id, residencyName: residency.name });
-
-      // Notification is now handled by the server (submit-visitor-request)
-
       toast({ title: "Request Sent", description: "Waiting for resident approval." });
-      setLocation(`/visitor-status/${requestId}?residencyId=${residency.id}`);
+      setLocation(`/visitor-success?id=${requestId}&residencyId=${residency.id}`);
     } catch (err) {
       console.error("Error submitting form: ", err);
       toast({ title: "Error", description: err.message || "There was an error submitting the form", variant: "destructive" });

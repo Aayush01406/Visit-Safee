@@ -5,7 +5,6 @@ import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth, AuthProvider } from "@/hooks/use-auth.jsx";
-import { NotificationManager } from "@/components/shared/NotificationManager";
 import { Loader2 } from "lucide-react";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -162,7 +161,6 @@ function Router() {
       </Route>
       
       <Route path="/visitor-success" component={VisitorStatus} />
-      <Route path="/visitor-status/:id" component={VisitorStatus} />
 
       <Route path="/:societyName/resident/:flatNumber">
         {(params) => (
@@ -218,7 +216,6 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
-          <NotificationManager />
           <Toaster />
           <Router />
         </TooltipProvider>
