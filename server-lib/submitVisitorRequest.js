@@ -130,20 +130,21 @@ export default async function handler(req, res) {
         },
         data: {
           type: "visitor_request",
+          actionType: "VISITOR_REQUEST",
           requestId: requestId,
           residencyId: residencyId,
           visitorName: visitorName,
           flatId: String(flatId),
-          click_action: "/resident/dashboard",
-          actionUrlApprove: `${baseUrl}/api/visitor-action?action=approve&residencyId=${residencyId}&requestId=${requestId}`,
-          actionUrlReject: `${baseUrl}/api/visitor-action?action=reject&residencyId=${residencyId}&requestId=${requestId}`
+          click_action: "/",
+          approveUrl: `${baseUrl}/api/visitor-action?action=approve&residencyId=${residencyId}&requestId=${requestId}`,
+          rejectUrl: `${baseUrl}/api/visitor-action?action=reject&residencyId=${residencyId}&requestId=${requestId}`
         },
         webpush: {
             headers: {
                 Urgency: "high"
             },
             fcmOptions: {
-                link: "/resident/dashboard"
+                link: "/"
             }
         },
         tokens: uniqueTokens

@@ -36,7 +36,8 @@ if (firebaseConfig.apiKey) {
       const data = payload.data || {};
       
       // Check if this is a visitor request notification
-      const isVisitorRequest = data.actionType === 'VISITOR_REQUEST';
+      // Match actionType sent from backend
+      const isVisitorRequest = data.actionType === 'VISITOR_REQUEST' || data.type === 'visitor_request';
       
       const notificationOptions = {
         body: body,
@@ -48,17 +49,17 @@ if (firebaseConfig.apiKey) {
       };
       
       // Add action buttons for visitor requests
-      if (isVisitorRequest && data.visitorId) {
+      if (isVisitorRequest) {
         notificationOptions.actions = [
           {
             action: 'APPROVE_VISITOR',
             title: '✅ Approve',
-            icon: '/icons/icon-192.png'
+            icon: '/icons/check.png'
           },
           {
             action: 'REJECT_VISITOR', 
             title: '❌ Reject',
-            icon: '/icons/icon-192.png'
+            icon: '/icons/x.png'
           }
         ];
       }
@@ -71,31 +72,52 @@ if (firebaseConfig.apiKey) {
 self.addEventListener('notificationclick', (event) => {
   console.log('[SW] Notification click received:', event);
   
+  const action = event.action;
+  const data = event.notification.data || {};
+  
   event.notification.close();
   
-  const data = event.notification.data || {};
-  const action = event.action;
-  
   if (action === 'APPROVE_VISITOR' || action === 'REJECT_VISITOR') {
-    // Open approval page instead of direct API call
-    const approveUrl = data.approveUrl;
-    const rejectUrl = data.rejectUrl;
-    const targetUrl = action === 'APPROVE_VISITOR' ? approveUrl : rejectUrl;
+    // Perform API call in background
+    const url = action === 'APPROVE_VISITOR' ? data.approveUrl : data.rejectUrl;
     
-    if (targetUrl) {
-      event.waitUntil(
-        clients.openWindow(targetUrl)
-      );
+    if (url) {
+        const promiseChain = fetch(url, { method: 'POST' })
+            .then(response => {
+                if (!response.ok) throw new Error('API request failed');
+                return response.json();
+            })
+            .then(responseData => {
+                console.log('Action success:', responseData);
+                // Open/Focus app to show updated status
+                return clients.matchAll({ type: 'window', includeUncontrolled: true })
+                    .then(windowClients => {
+                        // Try to focus existing window
+                        for (let client of windowClients) {
+                            if (client.url.includes(self.location.origin) && 'focus' in client) {
+                                return client.focus();
+                            }
+                        }
+                        // Open new window if none exists
+                        if (clients.openWindow) {
+                            return clients.openWindow('/');
+                        }
+                    });
+            })
+            .catch(err => {
+                console.error('Action failed:', err);
+                // Fallback: Open window to API or app to let user retry
+                if (clients.openWindow) {
+                    return clients.openWindow('/');
+                }
+            });
+
+        event.waitUntil(promiseChain);
     } else {
-      // Fallback URL construction
-      const visitorId = data.visitorId;
-      const token = data.approvalToken;
-      const actionType = action === 'APPROVE_VISITOR' ? 'approve' : 'reject';
-      const fallbackUrl = `/resident/decision?visitorId=${visitorId}&token=${token}&action=${actionType}`;
-      
-      event.waitUntil(
-        clients.openWindow(fallbackUrl)
-      );
+        console.error('No action URL provided in notification data');
+        if (clients.openWindow) {
+            event.waitUntil(clients.openWindow('/'));
+        }
     }
   } else {
     // Default click - open app
@@ -105,8 +127,7 @@ self.addEventListener('notificationclick', (event) => {
         .then((clientList) => {
           for (const client of clientList) {
             if (client.url.includes(self.location.origin) && 'focus' in client) {
-              client.focus();
-              return;
+              return client.focus();
             }
           }
           if (clients.openWindow) {

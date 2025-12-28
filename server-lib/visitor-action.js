@@ -2,10 +2,13 @@ import { initAdmin } from './firebaseAdmin.js';
 import admin from "firebase-admin";
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
+  // Allow GET (for direct links) and POST (for programmatic calls)
+  if (req.method !== "POST" && req.method !== "GET") {
     res.status(405).json({ error: "Method Not Allowed" });
     return;
   }
+
+  console.log(`[VisitorAction] Received ${req.method} request`);
 
   initAdmin();
   if (!admin.apps.length) {
