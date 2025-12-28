@@ -53,7 +53,7 @@ export default async function handler(req, res) {
 
     if (!action || !["approve", "reject"].includes(action)) {
         console.error(`[VisitorAction] Invalid action received: '${actionRaw}'`);
-        res.status(400).json({ error: "Invalid action" });
+        res.status(400).json({ error: "Invalid action", received: actionRaw });
         return;
     }
     
@@ -94,7 +94,8 @@ export default async function handler(req, res) {
              res.status(200).json({ 
                  success: true, 
                  message: "Request already processed", 
-                 status: currentStatus 
+                 status: currentStatus,
+                 inputAction: action // Debugging
              });
         }
         return;
@@ -113,7 +114,7 @@ export default async function handler(req, res) {
         // Redirect to root if accessed via browser (fallback for old SW)
         res.redirect(302, "/");
     } else {
-        res.status(200).json({ success: true, status });
+        res.status(200).json({ success: true, status, inputAction: action });
     }
   } catch (error) {
     console.error("Visitor Action Error:", error);

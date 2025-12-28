@@ -1,4 +1,4 @@
-const CACHE_NAME = 'visitsafe-v1';
+const CACHE_NAME = 'visitsafe-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -36,7 +36,6 @@ if (firebaseConfig.apiKey) {
       const data = payload.data || {};
       
       // Check if this is a visitor request notification
-      // Match actionType sent from backend
       const isVisitorRequest = data.actionType === 'VISITOR_REQUEST' || data.type === 'visitor_request';
       
       const notificationOptions = {
@@ -72,13 +71,13 @@ if (firebaseConfig.apiKey) {
 self.addEventListener('notificationclick', (event) => {
   console.log('[SW] Notification click received:', event);
   
-  const action = event.action;
+  // Normalize action to handle potential browser differences
+  const action = event.action ? event.action.toUpperCase() : '';
   const data = event.notification.data || {};
   
   event.notification.close();
 
   // 1. Handle "Action Confirmation" notifications (Success/Fail messages)
-  // If the user clicks these, we just dismiss them. Do NOT open the app.
   if (data.type === 'action_confirmation') {
       return;
   }
@@ -107,16 +106,17 @@ self.addEventListener('notificationclick', (event) => {
         }
     }
 
-    // Construct absolute URL for the API with query params as fallback
+    // Construct absolute URL for the API
+    // We rely on QUERY PARAMS for the action to ensure it is passed correctly even if body parsing fails
     const apiUrl = new URL('/api/visitor-action', self.location.origin);
-    // Explicitly set action, requestId, and residencyId in the URL params for safety
+    
     if (targetAction) apiUrl.searchParams.set('action', targetAction);
     if (requestId) apiUrl.searchParams.set('requestId', requestId);
     if (residencyId) apiUrl.searchParams.set('residencyId', residencyId);
 
-    console.log(`[SW] Sending request to: ${apiUrl.href} with body:`, { action: targetAction, requestId, residencyId });
+    console.log(`[SW] Sending request to: ${apiUrl.href}`);
 
-    // Use JSON body for robustness
+    // We still send a body just in case, but we prioritize the URL param for the action
     const requestBody = {
         action: targetAction,
         requestId: requestId,
@@ -128,7 +128,6 @@ self.addEventListener('notificationclick', (event) => {
         headers: {
             'Content-Type': 'application/json'
         },
-        // credentials: 'include', // REMOVED to avoid CORS/Network issues
         body: JSON.stringify(requestBody)
     })
     .then(async response => {
@@ -140,16 +139,24 @@ self.addEventListener('notificationclick', (event) => {
     })
     .then(responseData => {
         console.log('Action success:', responseData);
-        // User requested NOT to open the app on action. 
-        // We just log success and show a confirmation notification.
+        
         if (responseData.success) {
-            const status = responseData.status || (isApprove ? 'approved' : 'rejected');
+            // Determine display status
+            // TRUST THE INTENT: If the user clicked Approve, and the server said "success", assume it's Approved.
+            // Only override if the server explicitly says "already processed" and gives a different status.
+            
+            let status = isApprove ? 'approved' : 'rejected';
+            
+            // If already processed, trust the server's status
+            if (responseData.message && responseData.message.includes('already processed')) {
+                status = responseData.status || status;
+            }
+            
             const isApprovedStatus = status.toLowerCase() === 'approved';
             
             let title = isApprovedStatus ? 'Visitor Approved' : 'Visitor Rejected';
             let body = isApprovedStatus ? 'Access granted successfully.' : 'Access denied.';
 
-            // Handle case where request was already processed
             if (responseData.message && responseData.message.includes('already processed')) {
                 title = `Request Already ${isApprovedStatus ? 'Approved' : 'Rejected'}`;
                 body = `This request was previously ${status}.`;
@@ -159,15 +166,13 @@ self.addEventListener('notificationclick', (event) => {
                 body: body,
                 icon: '/icons/icon-192.png',
                 badge: '/icons/icon-192.png',
-                data: { type: 'action_confirmation' }, // Tag this so clicking it doesn't open app
+                data: { type: 'action_confirmation' },
                 timeout: 3000
             });
         }
     })
     .catch(err => {
         console.error('Action failed:', err);
-        // Show error notification instead of opening app
-        // Display the actual error message for debugging
         self.registration.showNotification('Action Failed', {
             body: `Error: ${err.message}`,
             icon: '/icons/icon-192.png',
@@ -178,7 +183,6 @@ self.addEventListener('notificationclick', (event) => {
     event.waitUntil(promiseChain);
   } else {
     // 3. Default click (Body click) - Open app
-    // Only open app if it's NOT a background action
     const urlToOpen = data.click_action || '/';
     event.waitUntil(
       clients.matchAll({ type: 'window', includeUncontrolled: true })
@@ -225,28 +229,23 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // ❌ Do NOT cache Firestore requests
   if (url.hostname.includes('firestore.googleapis.com') || 
       url.hostname.includes('firebase') ||
       url.hostname.includes('googleapis.com')) {
     return;
   }
   
-  // ❌ Do NOT cache API calls
   if (url.pathname.startsWith('/api/')) {
     return;
   }
 
-  // Network First Strategy
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Check if valid response
         if (!response || response.status !== 200 || response.type !== 'basic') {
           return response;
         }
 
-        // Only cache same-origin requests (static assets)
         if (url.origin === location.origin) {
             const responseToCache = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
@@ -261,7 +260,6 @@ self.addEventListener('fetch', (event) => {
             if (response) {
                 return response;
             }
-            // Offline fallback for navigation
             if (event.request.mode === 'navigate') {
                 return caches.match('/index.html');
             }
