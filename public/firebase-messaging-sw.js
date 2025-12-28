@@ -90,17 +90,37 @@ self.addEventListener('notificationclick', (event) => {
     
     console.log(`[SW] Processing action: ${action} -> ${targetAction}`);
     
-    // Construct absolute URL for the API
-    const apiUrl = new URL('/api/visitor-action', self.location.origin).href;
+    // Robust data extraction
+    let requestId = data.requestId || data.visitorId;
+    let residencyId = data.residencyId;
+
+    // Fallback: Extract from approveUrl/rejectUrl if missing
+    if ((!requestId || !residencyId) && (data.approveUrl || data.rejectUrl)) {
+        try {
+            const urlStr = data.approveUrl || data.rejectUrl;
+            const urlObj = new URL(urlStr);
+            if (!requestId) requestId = urlObj.searchParams.get('requestId');
+            if (!residencyId) residencyId = urlObj.searchParams.get('residencyId');
+            console.log(`[SW] Extracted missing data from URL: requestId=${requestId}, residencyId=${residencyId}`);
+        } catch (e) {
+            console.error('[SW] Failed to parse approveUrl for fallback data', e);
+        }
+    }
+
+    // Construct absolute URL for the API with query params as fallback
+    const apiUrl = new URL('/api/visitor-action', self.location.origin);
+    if (targetAction) apiUrl.searchParams.append('action', targetAction);
+    if (requestId) apiUrl.searchParams.append('requestId', requestId);
+    if (residencyId) apiUrl.searchParams.append('residencyId', residencyId);
 
     // Use JSON body for robustness
     const requestBody = {
         action: targetAction,
-        requestId: data.requestId,
-        residencyId: data.residencyId
+        requestId: requestId,
+        residencyId: residencyId
     };
 
-    const promiseChain = fetch(apiUrl, { 
+    const promiseChain = fetch(apiUrl.href, { 
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -132,8 +152,9 @@ self.addEventListener('notificationclick', (event) => {
     .catch(err => {
         console.error('Action failed:', err);
         // Show error notification instead of opening app
+        // Display the actual error message for debugging
         self.registration.showNotification('Action Failed', {
-            body: 'Could not process visitor request. Please try again.',
+            body: `Error: ${err.message}`,
             icon: '/icons/icon-192.png',
             data: { type: 'action_confirmation' }
         });

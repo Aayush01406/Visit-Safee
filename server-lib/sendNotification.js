@@ -121,6 +121,8 @@ export default async function handler(req, res) {
           },
           data: {
             visitorId: data.visitorId,
+            requestId: data.visitorId, // Ensure requestId is passed
+            residencyId: residencyId, // Ensure residencyId is passed
             actionType: 'VISITOR_REQUEST',
             approvalToken: data.approvalToken,
             approveUrl: data.approveUrl,
