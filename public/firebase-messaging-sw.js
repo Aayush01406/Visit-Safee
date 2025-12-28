@@ -105,10 +105,14 @@ self.addEventListener('notificationclick', (event) => {
         headers: {
             'Content-Type': 'application/json'
         },
+        credentials: 'include', // Important: Send cookies/auth data
         body: JSON.stringify(requestBody)
     })
-    .then(response => {
-        if (!response.ok) throw new Error('API request failed');
+    .then(async response => {
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API request failed: ${response.status} ${errorText}`);
+        }
         return response.json();
     })
     .then(responseData => {
