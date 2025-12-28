@@ -51,6 +51,7 @@ export default async function handler(req, res) {
     let residencyId = body.residencyId || query.residencyId;
     let requestId = body.requestId || query.requestId;
     let residentId = body.residentId || query.residentId;
+    let token = body.token || query.token;
     const username = body.username || "notification_action";
 
     // Normalize action
@@ -91,7 +92,79 @@ export default async function handler(req, res) {
         return;
     }
     
-    const currentStatus = doc.data().status;
+    const requestData = doc.data();
+    const currentStatus = requestData.status;
+
+    // --- VALIDATION LOGIC (Mirrors visitorDecision.js) ---
+
+    // 1. Validate Token
+    // Only enforce if the request has a token (backwards compatibility for old requests without token)
+    if (requestData.approvalToken) {
+        if (requestData.approvalToken !== token) {
+            console.warn(`[VisitorAction] Invalid token. Expected: ${requestData.approvalToken}, Got: ${token}`);
+            return res.status(403).json({ error: "Invalid approval token" });
+        }
+    }
+
+    // 2. Validate Resident Access
+    if (residentId && residentId !== 'admin') {
+        const residentDoc = await db.collection("residencies").doc(residencyId).collection("residents").doc(residentId).get();
+        
+        if (!residentDoc.exists) {
+            return res.status(403).json({ error: 'Resident not found' });
+        }
+
+        const residentData = residentDoc.data();
+        
+        // Validate flat access
+        let hasAccess = false;
+        
+        // Direct Flat ID Match
+        if (requestData.flatId && residentData.flatId && String(residentData.flatId) === String(requestData.flatId)) {
+            hasAccess = true;
+        } else {
+            // Legacy Match: Flat Number + Block Name
+            try {
+                // If request has flatId, look it up to get details
+                let requestFlatNum = requestData.flatNumber; // Legacy field?
+                let requestBlockId = requestData.blockId; // Legacy field?
+                
+                // If not in request, fetch from flatId
+                if (!requestFlatNum && requestData.flatId) {
+                     const flatDoc = await db.collection("residencies").doc(residencyId).collection("flats").doc(requestData.flatId).get();
+                     if (flatDoc.exists) {
+                         const fd = flatDoc.data();
+                         requestFlatNum = fd.number;
+                         requestBlockId = fd.blockId;
+                     }
+                }
+
+                if (requestFlatNum && requestBlockId) {
+                    const blockDoc = await db.collection("residencies").doc(residencyId).collection("blocks").doc(requestBlockId).get();
+                    if (blockDoc.exists) {
+                        const blockName = blockDoc.data().name;
+                        
+                        // Check if resident matches this flat/block
+                        // Resident block might be "BLOCK A" or "A"
+                        const normalize = s => String(s||'').toUpperCase().replace(/^(BLOCK|TOWER|WING)\s+/, "").trim();
+                        
+                        if (String(residentData.flat) === String(requestFlatNum) && 
+                            normalize(residentData.block) === normalize(blockName)) {
+                            hasAccess = true;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error validating flat access:', error);
+            }
+        }
+
+        if (!hasAccess) {
+             console.warn(`[VisitorAction] Access denied for resident ${residentId}`);
+             return res.status(403).json({ error: 'Access denied - not authorized for this flat' });
+        }
+    }
+    // -----------------------------------------------------
     
     // If attempting to approve/reject, check if it's already done
     if (currentStatus !== "pending") {

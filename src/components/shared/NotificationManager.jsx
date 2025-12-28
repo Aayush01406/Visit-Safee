@@ -16,7 +16,7 @@ export function NotificationManager() {
         if (!supported) return;
 
         if ('serviceWorker' in navigator) {
-          await navigator.serviceWorker.register('/service-worker.js');
+          await navigator.serviceWorker.register('/firebase-messaging-sw.js');
         }
 
         if (Notification.permission === 'default') {
@@ -50,8 +50,8 @@ export function NotificationManager() {
                 data: payload.data,
                 requireInteraction: true,
                 actions: [
-                  { action: 'APPROVE', title: 'Approve' },
-                  { action: 'REJECT', title: 'Reject' }
+                  { action: 'APPROVE_VISITOR', title: '✅ Approve' },
+                  { action: 'REJECT_VISITOR', title: '❌ Reject' }
                 ]
               });
             }

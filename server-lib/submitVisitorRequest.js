@@ -1,5 +1,6 @@
 import { initAdmin } from './firebaseAdmin.js';
 import admin from "firebase-admin";
+import crypto from 'crypto';
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -20,6 +21,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
+    // Generate Approval Token
+    const approvalToken = crypto.randomBytes(32).toString('hex');
+
     // 1. Create Request in Firestore
     const requestData = {
       visitorName,
@@ -29,6 +33,7 @@ export default async function handler(req, res) {
       vehicleNumber: vehicleNumber || null,
       residencyId,
       status: 'pending',
+      approvalToken, // Save the token
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -37,7 +42,7 @@ export default async function handler(req, res) {
     const requestId = requestRef.id;
 
     // 2. Find Residents to Notify
-    const tokens = [];
+    const recipients = []; // Array of { fcmToken, residentId }
 
     // Helper to normalize block names for comparison
     const normalize = (str) => String(str || "").toUpperCase().replace(/^(BLOCK|TOWER|WING)\s+/, "").trim();
@@ -81,7 +86,10 @@ export default async function handler(req, res) {
                         if (residentBlock === targetBlock) {
                             if (data.fcmToken) {
                                 console.log(`[SubmitRequest] Token found for ${data.username}`);
-                                tokens.push(data.fcmToken);
+                                recipients.push({
+                                    fcmToken: data.fcmToken,
+                                    residentId: doc.id
+                                });
                             } else {
                                 console.warn(`[SubmitRequest] No FCM Token for ${data.username}`);
                             }
@@ -108,54 +116,72 @@ export default async function handler(req, res) {
         if (residencyDoc.exists) {
             const rData = residencyDoc.data();
             if (rData.adminFcmToken) {
-                tokens.push(rData.adminFcmToken);
+                 // Admins don't have a residentId in the same way, but we can pass a placeholder or handle in visitor-action
+                 // For now, let's just add them without residentId or with a special one
+                recipients.push({
+                    fcmToken: rData.adminFcmToken,
+                    residentId: 'admin' 
+                });
             }
         }
     } catch (e) {
         console.warn("Failed to fetch admin token:", e);
     }
 
-    const uniqueTokens = [...new Set(tokens)];
-    
     // Construct Base URL for Action Links
     const protocol = req.headers['x-forwarded-proto'] || 'https';
     const host = req.headers.host;
     const baseUrl = `${protocol}://${host}`;
 
-    if (uniqueTokens.length > 0) {
-      const message = {
-        notification: {
-          title: "New Visitor Request",
-          body: `${visitorName} is requesting entry.`,
-        },
-        data: {
-          type: "visitor_request",
-          actionType: "VISITOR_REQUEST",
-          requestId: requestId,
-          residencyId: residencyId,
-          visitorName: visitorName,
-          flatId: String(flatId),
-          click_action: "/",
-          approveUrl: `${baseUrl}/api/visitor-action?action=approve&residencyId=${residencyId}&requestId=${requestId}`,
-          rejectUrl: `${baseUrl}/api/visitor-action?action=reject&residencyId=${residencyId}&requestId=${requestId}`
-        },
-        webpush: {
-            headers: {
-                Urgency: "high"
+    if (recipients.length > 0) {
+      // Send individual notifications to include residentId and approvalToken
+      const notificationPromises = recipients.map(({ fcmToken, residentId }) => {
+          const message = {
+            notification: {
+              title: "New Visitor Request",
+              body: `${visitorName} is requesting entry.`,
             },
-            fcmOptions: {
-                link: "/"
+            data: {
+              type: "visitor_request",
+              actionType: "VISITOR_REQUEST",
+              requestId: requestId,
+              residencyId: residencyId,
+              residentId: residentId, // CRITICAL: Pass residentId
+              approvalToken: approvalToken, // CRITICAL: Pass approvalToken
+              visitorName: visitorName,
+              flatId: String(flatId),
+              click_action: "/",
+              approveUrl: `${baseUrl}/api/visitor-action?action=approve&residencyId=${residencyId}&requestId=${requestId}&residentId=${residentId}&token=${approvalToken}`,
+              rejectUrl: `${baseUrl}/api/visitor-action?action=reject&residencyId=${residencyId}&requestId=${requestId}&residentId=${residentId}&token=${approvalToken}`
+            },
+            token: fcmToken,
+            webpush: {
+                headers: {
+                    Urgency: "high"
+                },
+                fcmOptions: {
+                    link: "/"
+                }
             }
-        },
-        tokens: uniqueTokens
-      };
+          };
+          return admin.messaging().send(message);
+      });
 
       try {
-        const response = await admin.messaging().sendMulticast(message);
-        console.log(`[SubmitRequest] Notifications sent: ${response.successCount} success, ${response.failureCount} failed`);
+        const results = await Promise.allSettled(notificationPromises);
+        const successCount = results.filter(r => r.status === 'fulfilled').length;
+        const failureCount = results.filter(r => r.status === 'rejected').length;
+        console.log(`[SubmitRequest] Notifications sent: ${successCount} success, ${failureCount} failed`);
+        
+        // Log failures
+        results.forEach((r, idx) => {
+            if (r.status === 'rejected') {
+                console.error(`[SubmitRequest] Failed to send to ${recipients[idx].residentId}:`, r.reason);
+            }
+        });
+
       } catch (pushError) {
         console.error("[SubmitRequest] Push notification error:", pushError);
-        // Don't fail the request if push fails
       }
     } else {
         console.log("[SubmitRequest] No tokens found for notification.");

@@ -8,6 +8,14 @@ const STATIC_ASSETS = [
   '/icons/icon-512.png'
 ];
 
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim());
+});
+
 // Import Firebase Scripts (Compat versions)
 importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
@@ -93,14 +101,16 @@ self.addEventListener('notificationclick', (event) => {
     let requestId = data.requestId || data.visitorId;
     let residencyId = data.residencyId;
     let residentId = data.residentId;
+    let approvalToken = data.approvalToken || data.token; // Extract token
 
     // Fallback: Extract from approveUrl/rejectUrl if missing
-    if ((!requestId || !residencyId) && (data.approveUrl || data.rejectUrl)) {
+    if ((!requestId || !residencyId || !approvalToken) && (data.approveUrl || data.rejectUrl)) {
         try {
             const urlStr = data.approveUrl || data.rejectUrl;
             const urlObj = new URL(urlStr);
             if (!requestId) requestId = urlObj.searchParams.get('requestId');
             if (!residencyId) residencyId = urlObj.searchParams.get('residencyId');
+            if (!approvalToken) approvalToken = urlObj.searchParams.get('token');
         } catch (e) {
             console.error('[SW] Failed to parse approveUrl for fallback data', e);
         }
@@ -120,7 +130,8 @@ self.addEventListener('notificationclick', (event) => {
         action: targetAction,
         requestId: requestId,
         residencyId: residencyId,
-        residentId: residentId
+        residentId: residentId,
+        token: approvalToken // Send token
     };
 
     const promiseChain = fetch(apiUrl.href, { 
