@@ -55,7 +55,12 @@ export default async function handler(req, res) {
   const handlerFn = handlers[route];
   
   if (handlerFn) {
-    return handlerFn(req, res);
+    try {
+      return await handlerFn(req, res);
+    } catch (err) {
+      console.error(`API Handler Error (${route}):`, err);
+      return res.status(500).json({ error: 'Internal Server Error', message: err.message });
+    }
   } else {
     return res.status(404).json({ error: `Route '${route}' not found` });
   }
